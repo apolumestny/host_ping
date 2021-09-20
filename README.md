@@ -2,12 +2,12 @@
 Create conf.ini file with structure
 
 [hosts]<br />
-#list of ip commas separated<br />
+#list of ip commas separated without space<br />
 hosts = <br />
 [notification]<br />
 sms_username = <br />
 sms_password = <br />
-#list of ip commas separated<br />
+#list of ip commas separated without space<br />
 msisdn_to_notif = <br />
 call_count = 2<br />
 #period in minutes between call or send sms<br />
