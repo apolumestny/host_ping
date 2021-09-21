@@ -18,7 +18,7 @@ if os.path.isfile(config_file):
     config.read(config_file)
 else:
     # return error and print config strucrure
-    print(f'Please create conf.ini in direcory {basedir}')
+    print(f'Please create conf.ini in {basedir}')
 
 
 class Alarm:
@@ -68,10 +68,12 @@ class DB(Alarm):
         else:
             # db already exists. need to check host from conf
             compare_host = self.compare_host_from_db_and_config(hosts)
-            if 'add_host' in compare_host:
-                pass
-            if 'delete_host' in compare_host:
-                pass
+            if compare_host['add_host'] is not None:
+                for new_host in compare_host['add_host']:
+                    self.add_host(new_host)
+            if compare_host['delete_host'] is not None:
+                for delete_host in compare_host['delete_host']:
+                    self.delete_host(delete_host)
         super().__init__(msisdn_to_notify=msisdn_to_notify, notification_delay=notification_delay, call_count=call_count,
                          call_url=call_url, sms_url=sms_urlm, sms_user=sms_user, sms_password=sms_password)
 
@@ -94,11 +96,11 @@ class DB(Alarm):
         # return difference between list of host in existing db and hosts from parameter
         existing_host: set = set(host for host in self.read_db().keys())
         host: set = set(host for host in hosts)
-        new_host: set = set(existing_host - host)
-        host_for_delete: set = set(new_host - existing_host)
+        new_host: set = set(host - existing_host)
+        host_for_delete: set = set(existing_host - host)
         return {'add_host': new_host, 'delete_host': host_for_delete}
 
-    def add_host(self, host: list) -> Union[None, str]:
+    def add_host(self, host: str) -> Union[None, str]:
         db = self.read_db()
         if host in db:
             return f'{host} already exist'
@@ -106,7 +108,7 @@ class DB(Alarm):
         self.save_db(db)
         return None
 
-    def delete_host(self, host) -> Union[None, str]:
+    def delete_host(self, host: str) -> Union[None, str]:
         db = self.read_db()
         if host in db:
             db.pop(host)
@@ -127,7 +129,7 @@ class DB(Alarm):
         return False
 
     def check_ping_result(self, ping_result: dict) -> None:
-        date_format = '%Y-%m-%d %H:%M:%S.%f'
+        date_format: str = '%Y-%m-%d %H:%M:%S.%f'
         current_time: dt.datetime = dt.datetime.now()
         for host, value in ping_result.items():
             info: dict = self.get_value(host, keys=['current_state', 'call_count', 'notification_last_time', ])
@@ -140,7 +142,7 @@ class DB(Alarm):
                 continue
             # host was unreachable
             elif value == 2 and info['current_state'] == 1:
-                notification_last_time = dt.datetime.strptime(info['notification_last_time'], date_format)
+                notification_last_time: dt.datetime = dt.datetime.strptime(info['notification_last_time'], date_format)
                 # check call count if it not equal count in conf
                 # and call_delay more than in conf than make call
                 if info['call_count'] < self.call_count and self.notification_delay_check(notification_last_time):
@@ -174,9 +176,9 @@ class Server:
         self.hosts = hosts
 
     def ping_servers(self) -> dict:
-        result = {}
+        result: dict = {}
         for host in self.hosts:
-            proc = subprocess.Popen(['ping', '-W', '1', '-c', '1', host], stdout=subprocess.PIPE)
+            proc: subprocess.Popen = subprocess.Popen(['ping', '-W', '1', '-c', '1', host], stdout=subprocess.PIPE)
             stdout, stderr = proc.communicate()
             result[host] = proc.returncode
         return result
