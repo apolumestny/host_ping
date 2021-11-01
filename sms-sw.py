@@ -5,6 +5,7 @@ import datetime as dt
 import json
 import os
 import subprocess
+import sys
 
 import requests
 
@@ -133,29 +134,43 @@ class DB(Alarm):
         current_time: dt.datetime = dt.datetime.now()
         for host, value in ping_result.items():
             info: dict = self.get_value(host, keys=['current_state', 'call_count', 'notification_last_time', ])
-            # if ping result equal 2 then host is unreachable
+            # if ping result equal 1 then host is unreachable
             # new alarm
-            if value == 2 and info['current_state'] == 0:
+            if value == 1 and info['current_state'] == 0:
+                # self.send_call_alarm(host)
+                # self.change_db_parameter(host, current_state=1, call_count=1,
+                #                          notification_last_time=current_time, check_time=current_time)
+                self.change_db_parameter(host, current_state=1, check_time=current_time)
+                continue
+            if value == 1 and info['current_state'] == 1:
                 self.send_call_alarm(host)
-                self.change_db_parameter(host, current_state=1, call_count=1,
+                # self.change_db_parameter(host, current_state=1, call_count=1,
+                #                          notification_last_time=current_time, check_time=current_time)
+                self.change_db_parameter(host, current_state=1, unavailable=1,
                                          notification_last_time=current_time, check_time=current_time)
                 continue
             # host was unreachable
-            elif value == 2 and info['current_state'] == 1:
+            elif value == 1 and info['unavailable'] == 1:
                 notification_last_time: dt.datetime = dt.datetime.strptime(info['notification_last_time'], date_format)
                 # check call count if it not equal count in conf
                 # and call_delay more than in conf than make call
                 if info['call_count'] < self.call_count and self.notification_delay_check(notification_last_time):
                     self.send_call_alarm(host)
-                    self.change_db_parameter(host, current_state=1, call_count=info['call_count'] + 1,
-                                             notification_last_time=current_time, check_time=current_time)
+                    self.change_db_parameter(host,
+                                             current_state=1,
+                                             call_count=info['call_count'] + 1,
+                                             notification_last_time=current_time,
+                                             check_time=current_time,
+                                             unavailable=1)
 
                 # if call count equal count in conf than check sms_last_time
                 # and if it None send sms if not None - get sms_delay if it equal or
                 # more than sms_delay from conf than send sms
                 elif info['call_count'] == self.call_count and self.notification_delay_check(notification_last_time):
                     self.send_sms_alarm(host)
-                    self.change_db_parameter(host, current_state=1, check_time=current_time,
+                    self.change_db_parameter(host,
+                                             current_state=1,
+                                             check_time=current_time,
                                              notification_last_time=current_time)
                     continue
             # if host reachable need to check state in db
@@ -163,8 +178,12 @@ class DB(Alarm):
                 self.change_db_parameter(host, check_time=current_time)
                 continue
             elif value == 0 and info['current_state'] == 1:
-                self.change_db_parameter(host, current_state=0, call_count=0,
-                                         notification_last_time=None, check_time=current_time)
+                self.change_db_parameter(host,
+                                         current_state=0,
+                                         call_count=0,
+                                         notification_last_time=None,
+                                         check_time=current_time,
+                                         unavailable=0)
                 continue
             else:
                 self.change_db_parameter(host, check_time=current_time)
@@ -183,6 +202,25 @@ class Server:
             result[host] = proc.returncode
         return result
 
+    def fping_servers(self) -> dict:
+        cmd = ['fping', '-u', '--count', '10'] + self.hosts
+        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        output = proc.stdout.decode("utf-8").strip()
+        return output
+
+    def fping_result_to_json(self, fping: tuple):
+        res = fping.split('\n')
+        resp = []
+        for line in res:
+            host, stat = line.split(':')
+            sent, received, loss = stat.split(',')[0].split('=')[1].strip().split('/')
+            try:
+                min, avg, max = stat.split(',')[1].split('=')[1].strip().split('/')
+            except IndexError:
+                min, avg, max = [None, None, None]
+            resp.append([dt.datetime.utcnow(),'ip_from', host.strip(), sent, received, loss.replace('%', ''), min, avg, max,])
+        return json.dumps(resp, default=str)
+
 
 if __name__ == '__main__':
     hosts = config['hosts']['hosts'].split(',')
@@ -199,7 +237,8 @@ if __name__ == '__main__':
 
     server = Server(hosts)
     # you can check logic of alarm by edit result var
-    # result = {'host_ip': state[0 - all good, 2 host unavailable]}
-
-    result = server.ping_servers()
+    # result = {'host_ip': state[0 - all good, 1 host unavailable]}
+    result = {'9.19.19.19': 1}
+    #result = server.ping_servers()
+    #print(server.fping_result_to_json(result))
     db.check_ping_result(result)
