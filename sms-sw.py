@@ -231,13 +231,13 @@ class Server:
             result[host] = proc.returncode
         return result
 
-    def fping_servers(self) -> dict:
+    def fping_servers(self) -> str:
         cmd = ['fping', '-u', '--count', '10'] + self.hosts
         proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         output = proc.stdout.decode("utf-8").strip()
         return output
 
-    def fping_result_to_json(self, fping: tuple):
+    def fping_result_to_json(self, fping: str):
         res = fping.split('\n')
         resp = []
         for line in res:
